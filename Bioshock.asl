@@ -3,7 +3,7 @@ state("bioshock")
 	bool inGame			:	0x827610, 0x1C, 0x9C, 0x10, 0x4C, 0x2E8, 0x60;
 	byte fontainePhase	:	0x8BC810, 0x0, 0x20, 0x4C, 0x1108;
 	int	 lvl			:	0x8D1B38;
-	bool loading		:	0x8D666C;
+	int	 loading		:	0x8D666C;
 }
 
 startup 
@@ -31,7 +31,7 @@ exit{timer.IsGameTimePaused=true;}
 
 start{vars.fromRCC=false; return current.lvl == 239 && current.inGame && !old.inGame;}
 
-isLoading{return current.loading;}
+isLoading{return current.loading !=0;}
 
 split
 {
