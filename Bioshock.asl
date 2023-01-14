@@ -1,9 +1,16 @@
-state("bioshock")
+state("bioshock", "Steam 1.1")
 {
 	bool inGame			:	0x827610, 0x1C, 0x9C, 0x10, 0x4C, 0x2E8, 0x60;
 	byte fontainePhase	:	0x8BC810, 0x0, 0x20, 0x4C, 0x1108;
 	int	 lvl			:	0x8D1B38;
 	int	 loading		:	0x8D666C;
+}
+state("bioshock", "GOG 1.1")
+{
+	bool inGame			:	0x8296C0, 0x1C, 0x9C, 0x10, 0x4C, 0x2E8, 0x60;
+	byte fontainePhase	:	0x9A4668, 0x0, 0x20, 0x4C, 0x1108;
+	int	 lvl			:	0x9B9990;
+	int	 loading		:	0x9BE4D4;
 }
 
 startup 
@@ -25,7 +32,43 @@ startup
 	}
 }
 
-init{timer.IsGameTimePaused=false; vars.fromRCC=false; vars.prevLvl=0;}
+init
+{
+	timer.IsGameTimePaused=false;
+	vars.fromRCC=false;
+	vars.prevLvl=0;
+	
+	var module = modules.First();
+	var name = module.ModuleName;
+	var size = module.ModuleMemorySize;
+	
+	print("Size = "+size);
+	
+	switch(size)
+    {
+		case 11763712:
+			version = "Steam 1.1";
+			break;
+		case 11747328:
+			version = "GOG 1.1";
+			break;
+		default:
+			version = "Unknown";
+			var gameMessageText = "Unknown "+name+" "+size;
+			var gameMessage = MessageBox.Show(
+				"It appears you're running an unknown/newer version of the game.\n"+
+				"This ASL script might not work.\n\n"+
+				"Please @PrototypeAlpha#7561 on the BioShock Speedrunning discord with "+
+				"the following:\n"+gameMessageText+"\n\n"+
+				"Press OK to copy the above info to the clipboard and close this message.",
+				"LiveSplit",
+				MessageBoxButtons.OKCancel,MessageBoxIcon.Warning
+			);
+			if (gameMessage == DialogResult.OK) Clipboard.SetText(gameMessageText);
+			break;
+	}
+	print("Version = "+version);
+}
 
 exit{timer.IsGameTimePaused=true;}
 
