@@ -3,16 +3,32 @@ state("bioshock", "Steam 1.1")
 	byte  fontainePhase : 0x8BC810, 0x0, 0x20, 0x4C, 0x1108;
 	int   lvl           : 0x8D1B38;
 	int   loading       : 0x8D666C;
+	
+	float gameSpeed     : 0x8D1988, 0x1C, 0xE0, 0x5BC;
+	int   gameSpeedPtr  : 0x8D1988, 0x1C, 0xE0;
+	float positionX     : 0x9C4970, 0x38, 0x8C, 0x1C0;
+	float positionY     : 0x9C4970, 0x38, 0x8C, 0x1C4;
+	float positionZ     : 0x9C4970, 0x38, 0x8C, 0x1C8;
+	int   showHUD       : 0x9C4970, 0x38, 0xEC, 0xAA4;
 }
 state("bioshock", "GOG 1.1")
 {
 	byte  fontainePhase : 0x9A4668, 0x0, 0x20, 0x4C, 0x1108;
 	int   lvl           : 0x9B9990;
 	int   loading       : 0x9BE4D4;
+	
+	float gameSpeed     : 0x9B97E0, 0x1C, 0xE0, 0x5BC;
+	int   gameSpeedPtr  : 0x9B97E0, 0x1C, 0xE0;
+	float positionX     : 0x9BE730, 0x38, 0x8C, 0x1C0;
+	float positionY     : 0x9BE730, 0x38, 0x8C, 0x1C4;
+	float positionZ     : 0x9BE730, 0x38, 0x8C, 0x1C8;
+	int   showHUD       : 0x9BE730, 0x38, 0xEC, 0xAA4;
 }
 
 startup 
 {
+	vars.BioHelp = Assembly.Load(File.ReadAllBytes("Components/bioshock-lib")).CreateInstance("Main");
+	
 	vars.startPos = new Vector3f(502f, 1184f, 73f);
 	
 	vars.Distance2D = (Func<Vector3f, Vector3f, float>)((vec1, vec2) =>
@@ -46,10 +62,21 @@ startup
 		else if(item == "Arcadia (Not skipped)"||item == "Farmers Market") settings.Add(item, false);
 		else settings.Add(item, true);
 	}
+	
+	settings.Add("option_EnableSpeedup", false, "Enable Cutscene Speedup");
 }
 
 init
 {
+	if (settings["option_EnableSpeedup"]) vars.BioHelp.SetProcess(game);
+	else vars.BioHelp.SetProcess(null);
+	
+	vars.GetShortTime = (Func<double>)(() =>
+	{
+		TimeSpan difference = timer.AdjustedStartTime - timer.StartTime;
+		return difference.TotalMilliseconds;
+	});
+	
 	vars.fromRCC=false;
 	vars.prevLvl=0;
 	
@@ -99,22 +126,54 @@ exit{timer.IsGameTimePaused=true;}
 
 start
 {
+	//vars.BioHelp.ResetValues();
 	vars.fromRCC=false;
 	
 	// Don't autostart if loading, not on Crash Site level, unknown game version, or currently underwater
 	if(current.loading != 0 || current.lvl != 239 || !vars.Position.Enabled || vars.Position.Current.Z < vars.startPos.Z)
 		return;
+	
 	// Autostart on loading from a save
 	if(old.loading != 0 && current.loading == 0)
-		return vars.Position.Current.DistanceXY(vars.startPos) < 2f;
+	{
+		if (vars.Position.Current.DistanceXY(vars.startPos) < 2f)
+		{
+			if (settings["option_EnableSpeedup"]) vars.BioHelp.SetProcess(game);
+			else vars.BioHelp.SetProcess(null);
+			
+			vars.BioHelp.ResetValues();
+			vars.BioHelp.LiveSplitRunning = true;
+			vars.BioHelp.Ready = true;
+			return true;
+		}
+		else return false;
+	}
+	
 	// Autostart on gaining control after opening cutscene
-	return (vars.Position.Old.DistanceXY(vars.startPos) < 2f && vars.Position.Current.DistanceXY(vars.startPos) > 2f) || vars.Position.Current.Z < vars.Position.Old.Z;
+	if ((vars.Position.Old.DistanceXY(vars.startPos) < 2f && vars.Position.Current.DistanceXY(vars.startPos) > 2f) || vars.Position.Current.Z < vars.Position.Old.Z)
+	{
+		if (settings["option_EnableSpeedup"]) vars.BioHelp.SetProcess(game);
+		else vars.BioHelp.SetProcess(null);
+		
+		vars.BioHelp.ResetValues();
+		vars.BioHelp.LiveSplitRunning = true;
+		vars.BioHelp.Ready = true;
+		return true;
+	}
 }
 
 isLoading{return current.loading != 0;}
 
 split
 {
+	if (settings["option_EnableSpeedup"])
+	{
+		double curr = vars.GetShortTime() * -1;
+		double arti = vars.BioHelp.SpeedTime;
+		double toSub = arti - curr;
+		timer.AdjustedStartTime -= TimeSpan.FromMilliseconds(toSub);
+	}
+	
 	if(current.lvl != old.lvl)
 	{
 		if(current.lvl == 0 && old.lvl != 0) vars.prevLvl=old.lvl;
@@ -140,4 +199,16 @@ split
 
 reset{return current.loading != 0 && old.loading != 0 && current.lvl == 239 && vars.Position.Enabled && vars.Position.Current.DistanceXY(vars.startPos) < 2f;}
 
-update{vars.Position.Update(game);}
+update
+{
+	vars.Position.Update(game);
+	
+	Time currTime = timer.CurrentTime;
+	if (currTime.GameTime.HasValue)
+	{
+		if (vars.BioHelp != null)
+		{
+			vars.BioHelp.LiveSplitRunning = currTime.GameTime.Value.TotalMilliseconds != 0;
+		}
+	}
+}
