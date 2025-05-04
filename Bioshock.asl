@@ -80,7 +80,7 @@ init
 	vars.fromRCC=false;
 	vars.prevLvl=0;
 	
-	var module = modules.First();
+	var module = game.MainModule;
 	var name = module.ModuleName;
 	var size = module.ModuleMemorySize;
 	
